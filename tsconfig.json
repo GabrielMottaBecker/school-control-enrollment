@@ -22,8 +22,15 @@
     "strictBindCallApply": true,
     "noFallthroughCasesInSwitch": true,
     "paths": {
-      "@shared/*": ["src/shared/*"],
-      "@enrollment/*": ["src/modules/enrollment/*"]
+      "@shared/*": [
+        "src/shared/*"
+      ],
+      "@enrollment/*": [
+        "src/modules/enrollment/*"
+      ],
+      "@shared/infra/hateoas": [
+        "src/shared/infra/hateoas/index.ts"
+      ]
     }
   }
 }

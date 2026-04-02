@@ -44,7 +44,7 @@ npm run db:migrate
 
 ## Rodando a aplicação
 
-### Desenvolvimento (com hot reload)
+### Desenvolvimento
 
 ```bash
 npm run start:dev
@@ -93,22 +93,36 @@ docker run --name school-db \
 
 ---
 
+## Documentação interativa (Swagger)
+
+Com a aplicação rodando, acesse a documentação interativa em:
+
+```
+http://localhost:3000/docs
+```
+
+O Swagger lista todas as rotas disponíveis, permite preencher os parâmetros e disparar requisições diretamente pelo navegador.
+
+---
+
 ## Módulo de Matrículas (Enrollments)
 
 Este é o único módulo ativo nesta aplicação. Ele gerencia matrículas de alunos em turmas.
 
 > **Observação:** Os campos `studentId` e `classOfferingId` são UUIDs livres (sem foreign key). Em uma arquitetura de microserviços, a validação desses IDs é responsabilidade dos respectivos serviços.
 
+**Base URL:** `http://localhost:3000/v1/enrollments`
+
 ---
 
 ### Rotas disponíveis
 
-#### POST /enrollments — Criar matrícula
+#### POST /v1/enrollments — Criar matrícula
 
-Matricula um aluno em uma turma.
+Matricula um aluno em uma turma. Ambos os campos são obrigatórios e devem ser UUIDs válidos.
 
 ```
-POST http://localhost:3000/enrollments
+POST http://localhost:3000/v1/enrollments
 Content-Type: application/json
 ```
 
@@ -122,7 +136,19 @@ Content-Type: application/json
 
 **Resposta de sucesso:** `201 Created` (sem body)
 
-**Resposta de erro (já matriculado):** `409 Conflict`
+**Resposta de erro — campos inválidos:** `400 Bad Request`
+```json
+{
+  "message": [
+    "studentId must be a UUID",
+    "classOfferingId must be a UUID"
+  ],
+  "error": "Bad Request",
+  "statusCode": 400
+}
+```
+
+**Resposta de erro — já matriculado:** `409 Conflict`
 ```json
 {
   "message": "Student is already enrolled in this class offering",
@@ -133,41 +159,67 @@ Content-Type: application/json
 
 ---
 
-#### GET /enrollments/class-offering/:classOfferingId — Listar matrículas de uma turma
+#### GET /v1/enrollments — Listar matrículas de uma turma
 
-Retorna todas as matrículas ativas e canceladas de uma turma específica.
+Retorna as matrículas de uma turma com paginação e links HATEOAS.
 
 ```
-GET http://localhost:3000/enrollments/class-offering/d0000004-0000-0000-0000-000000000001
+GET http://localhost:3000/v1/enrollments?class_offering_id={id}&_page=1&_size=10
 ```
+
+| Query param | Obrigatório | Descrição |
+|---|---|---|
+| `class_offering_id` | Sim | ID da turma |
+| `_page` | Não | Página desejada (padrão: `1`) |
+| `_size` | Não | Itens por página (padrão: `10`) |
 
 **Resposta de sucesso:** `200 OK`
 ```json
-[
-  {
-    "id": "e0000005-0000-0000-0000-000000000001",
-    "studentId": "c0000003-0000-0000-0000-000000000001",
-    "classOfferingId": "d0000004-0000-0000-0000-000000000001",
-    "status": "active",
-    "enrolledAt": "2025-02-08T00:00:00.000Z",
-    "canceledAt": null
+{
+  "data": [
+    {
+      "id": "e0000005-0000-0000-0000-000000000001",
+      "studentId": "c0000003-0000-0000-0000-000000000001",
+      "classOfferingId": "d0000004-0000-0000-0000-000000000001",
+      "status": "active",
+      "enrolledAt": "2025-02-08T00:00:00.000Z",
+      "canceledAt": null,
+      "_links": {
+        "self": { "href": "/v1/enrollments/e0000005-0000-0000-0000-000000000001", "method": "GET" },
+        "cancel": { "href": "/v1/enrollments/e0000005-0000-0000-0000-000000000001/cancel", "method": "PATCH" }
+      }
+    }
+  ],
+  "meta": {
+    "totalItems": 1,
+    "itemsPerPage": 10,
+    "currentPage": 1,
+    "totalPages": 1
+  },
+  "_links": {
+    "self": { "href": "/v1/enrollments?_page=1&_size=10", "method": "GET" },
+    "next": null,
+    "prev": null,
+    "first": { "href": "/v1/enrollments?_page=1&_size=10", "method": "GET" },
+    "last": { "href": "/v1/enrollments?_page=1&_size=10", "method": "GET" },
+    "create": { "href": "/v1/enrollments", "method": "POST" }
   }
-]
+}
 ```
 
 ---
 
-#### DELETE /enrollments/:id — Cancelar matrícula
+#### PATCH /v1/enrollments/:id/cancel — Cancelar matrícula
 
-Cancela uma matrícula pelo seu ID.
+Cancela uma matrícula pelo seu ID. Não recebe body.
 
 ```
-DELETE http://localhost:3000/enrollments/e0000005-0000-0000-0000-000000000001
+PATCH http://localhost:3000/v1/enrollments/{id}/cancel
 ```
 
-**Resposta de sucesso:** `200 OK` (sem body)
+**Resposta de sucesso:** `204 No Content` (sem body)
 
-**Resposta de erro (não encontrada):** `404 Not Found`
+**Resposta de erro — não encontrada:** `404 Not Found`
 ```json
 {
   "message": "Enrollment not found",
@@ -181,16 +233,16 @@ DELETE http://localhost:3000/enrollments/e0000005-0000-0000-0000-000000000001
 ### Exemplo de fluxo completo no Postman
 
 1. **Criar uma matrícula**
-   - `POST /enrollments` com `studentId` e `classOfferingId`
+   - `POST /v1/enrollments` com `studentId` e `classOfferingId` no body
 
 2. **Verificar a matrícula criada**
-   - `GET /enrollments/class-offering/{classOfferingId}` usando o mesmo `classOfferingId`
+   - `GET /v1/enrollments?class_offering_id={classOfferingId}` — o registro aparece com `"status": "active"`
 
 3. **Cancelar a matrícula**
-   - `DELETE /enrollments/{id}` usando o `id` retornado no passo 2
+   - `PATCH /v1/enrollments/{id}/cancel` usando o `id` retornado no passo 2
 
 4. **Verificar o cancelamento**
-   - `GET /enrollments/class-offering/{classOfferingId}` novamente — o registro aparecerá com `"status": "canceled"`
+   - `GET /v1/enrollments?class_offering_id={classOfferingId}` novamente — o registro aparecerá com `"status": "canceled"`
 
 ---
 

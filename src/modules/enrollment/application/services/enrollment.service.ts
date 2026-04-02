@@ -1,3 +1,4 @@
+import { CreateEnrollmentDto } from "@enrollment/application/dto/create-enrollment.dto";
 import { EnrollmentDto } from "@enrollment/application/dto/enrollment.dto";
 import {
   Enrollment,
@@ -7,6 +8,7 @@ import {
   ENROLLMENT_REPOSITORY,
   type EnrollmentRepository,
 } from "@enrollment/domain/repositories/enrollment-repository.interface";
+import type { PaginatedResult } from "@shared/infra/hateoas";
 import {
   ConflictException,
   Inject,
@@ -21,10 +23,7 @@ export class EnrollmentService {
     private readonly enrollmentRepository: EnrollmentRepository,
   ) {}
 
-  async enroll(dto: {
-    studentId: string;
-    classOfferingId: string;
-  }): Promise<void> {
+  async enroll(dto: CreateEnrollmentDto): Promise<void> {
     const existing =
       await this.enrollmentRepository.findByStudentAndClassOffering(
         dto.studentId,
@@ -57,9 +56,15 @@ export class EnrollmentService {
     await this.enrollmentRepository.cancel(id);
   }
 
-  async listByClassOffering(classOfferingId: string): Promise<EnrollmentDto[]> {
-    const response =
-      await this.enrollmentRepository.findByClassOfferingId(classOfferingId);
-    return response.map((row) => EnrollmentDto.from(row)!);
+  async listByClassOffering(
+    classOfferingId: string,
+    page: number,
+    limit: number,
+  ): Promise<PaginatedResult<EnrollmentDto>> {
+    const all = await this.enrollmentRepository.findByClassOfferingId(classOfferingId);
+    const total = all.length;
+    const start = (page - 1) * limit;
+    const data = all.slice(start, start + limit).map((row) => EnrollmentDto.from(row)!);
+    return { data, total, page, limit };
   }
 }
