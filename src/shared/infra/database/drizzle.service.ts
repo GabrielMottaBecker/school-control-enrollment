@@ -1,3 +1,5 @@
+import { classOfferingsReferenceSchema } from "@enrollment/infra/schemas/class-offering-reference.schema";
+import { studentsReferenceSchema } from "@enrollment/infra/schemas/student-reference.schema";
 import {
   enrollmentStatusEnum,
   enrollmentsSchema,
@@ -7,6 +9,8 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 
 const schema = {
+  studentsReferenceSchema,
+  classOfferingsReferenceSchema,
   enrollmentsSchema,
   enrollmentStatusEnum,
 };
@@ -20,7 +24,6 @@ export class DrizzleService implements OnModuleDestroy {
     this.pool = new Pool({
       connectionString: process.env.DATABASE_URL,
     });
-
     this.db = drizzle(this.pool, { schema });
   }
 
