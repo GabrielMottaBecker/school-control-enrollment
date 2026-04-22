@@ -105,11 +105,30 @@ O Swagger lista todas as rotas disponíveis, permite preencher os parâmetros e 
 
 ---
 
+## Banco de dados
+
+Após rodar `db:migrate`, três tabelas são criadas:
+
+| Tabela | Descrição |
+|---|---|
+| `students` | Tabela de referência — armazena apenas o `id` do aluno |
+| `class_offerings` | Tabela de referência — armazena apenas o `id` da turma |
+| `enrollments` | Tabela principal — registra as matrículas com FK para as duas tabelas acima |
+
+> As tabelas `students` e `class_offerings` são tabelas de referência seguindo o princípio de microsserviços — armazenam apenas os dados necessários para garantir integridade referencial no banco. A gestão completa desses dados é responsabilidade dos seus respectivos microserviços.
+
+### Inserindo dados de referência
+
+Antes de criar uma matrícula, os IDs do aluno e da turma precisam existir nas tabelas de referência. Insira via Drizzle Studio (`npm run db:studio`) na aba SQL:
+
+```sql
+INSERT INTO students (id) VALUES ('uuid-do-aluno');
+INSERT INTO class_offerings (id) VALUES ('uuid-da-turma');
+```
+
+---
+
 ## Módulo de Matrículas (Enrollments)
-
-Este é o único módulo ativo nesta aplicação. Ele gerencia matrículas de alunos em turmas.
-
-> **Observação:** Os campos `studentId` e `classOfferingId` são UUIDs livres (sem foreign key). Em uma arquitetura de microserviços, a validação desses IDs é responsabilidade dos respectivos serviços.
 
 **Base URL:** `http://localhost:3000/v1/enrollments`
 
@@ -119,7 +138,7 @@ Este é o único módulo ativo nesta aplicação. Ele gerencia matrículas de al
 
 #### POST /v1/enrollments — Criar matrícula
 
-Matricula um aluno em uma turma. Ambos os campos são obrigatórios e devem ser UUIDs válidos.
+Matricula um aluno em uma turma. Ambos os campos são obrigatórios e devem ser UUIDs válidos e previamente inseridos nas tabelas de referência.
 
 ```
 POST http://localhost:3000/v1/enrollments
@@ -129,8 +148,8 @@ Content-Type: application/json
 **Body:**
 ```json
 {
-  "studentId": "c0000003-0000-0000-0000-000000000001",
-  "classOfferingId": "d0000004-0000-0000-0000-000000000001"
+  "studentId": "3a7b9e2c-1f4d-4a8b-9c0e-5d6f7a8b9c0d",
+  "classOfferingId": "8b3f2a1e-6c7d-4e9f-b5a2-1c3d4e5f6a7b"
 }
 ```
 
@@ -157,6 +176,10 @@ Content-Type: application/json
 }
 ```
 
+**Resposta de erro — IDs não existem nas tabelas de referência:** `500 Internal Server Error`
+
+> Garanta que o `studentId` existe em `students` e o `classOfferingId` existe em `class_offerings` antes de criar a matrícula.
+
 ---
 
 #### GET /v1/enrollments — Listar matrículas de uma turma
@@ -179,8 +202,8 @@ GET http://localhost:3000/v1/enrollments?class_offering_id={id}&_page=1&_size=10
   "data": [
     {
       "id": "e0000005-0000-0000-0000-000000000001",
-      "studentId": "c0000003-0000-0000-0000-000000000001",
-      "classOfferingId": "d0000004-0000-0000-0000-000000000001",
+      "studentId": "3a7b9e2c-1f4d-4a8b-9c0e-5d6f7a8b9c0d",
+      "classOfferingId": "8b3f2a1e-6c7d-4e9f-b5a2-1c3d4e5f6a7b",
       "status": "active",
       "enrolledAt": "2025-02-08T00:00:00.000Z",
       "canceledAt": null,
@@ -230,18 +253,24 @@ PATCH http://localhost:3000/v1/enrollments/{id}/cancel
 
 ---
 
-### Exemplo de fluxo completo no Postman
+### Exemplo de fluxo completo
 
-1. **Criar uma matrícula**
+1. **Inserir dados de referência** via Drizzle Studio (`npm run db:studio`):
+   ```sql
+   INSERT INTO students (id) VALUES ('3a7b9e2c-1f4d-4a8b-9c0e-5d6f7a8b9c0d');
+   INSERT INTO class_offerings (id) VALUES ('8b3f2a1e-6c7d-4e9f-b5a2-1c3d4e5f6a7b');
+   ```
+
+2. **Criar uma matrícula**
    - `POST /v1/enrollments` com `studentId` e `classOfferingId` no body
 
-2. **Verificar a matrícula criada**
+3. **Verificar a matrícula criada**
    - `GET /v1/enrollments?class_offering_id={classOfferingId}` — o registro aparece com `"status": "active"`
 
-3. **Cancelar a matrícula**
-   - `PATCH /v1/enrollments/{id}/cancel` usando o `id` retornado no passo 2
+4. **Cancelar a matrícula**
+   - `PATCH /v1/enrollments/{id}/cancel` usando o `id` retornado no passo 3
 
-4. **Verificar o cancelamento**
+5. **Verificar o cancelamento**
    - `GET /v1/enrollments?class_offering_id={classOfferingId}` novamente — o registro aparecerá com `"status": "canceled"`
 
 ---
