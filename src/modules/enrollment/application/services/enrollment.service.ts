@@ -1,5 +1,6 @@
 import { CreateEnrollmentDto } from "@enrollment/application/dto/create-enrollment.dto";
 import { EnrollmentDto } from "@enrollment/application/dto/enrollment.dto";
+import { EnrollmentEventPublisher } from "@enrollment/application/services/enrollment-event.publisher";
 import {
   Enrollment,
   EnrollmentStatus,
@@ -21,6 +22,7 @@ export class EnrollmentService {
   constructor(
     @Inject(ENROLLMENT_REPOSITORY)
     private readonly enrollmentRepository: EnrollmentRepository,
+    private readonly eventPublisher: EnrollmentEventPublisher,
   ) {}
 
   async enroll(dto: CreateEnrollmentDto): Promise<void> {
@@ -44,6 +46,7 @@ export class EnrollmentService {
     });
 
     await this.enrollmentRepository.create(enrollment!);
+    this.eventPublisher.enrollmentCreated(dto.studentId, dto.classOfferingId);
   }
 
   async cancel(id: string): Promise<void> {
@@ -54,6 +57,7 @@ export class EnrollmentService {
     }
 
     await this.enrollmentRepository.cancel(id);
+    this.eventPublisher.enrollmentCancelled(id);
   }
 
   async listByClassOffering(
