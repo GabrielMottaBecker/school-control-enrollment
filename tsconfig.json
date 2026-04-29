@@ -28,8 +28,8 @@
       "@enrollment/*": [
         "src/modules/enrollment/*"
       ],
-      "@shared/infra/hateoas": [
-        "src/shared/infra/hateoas/index.ts"
+      "@messaging/*": [
+        "src/modules/messaging/*"
       ]
     }
   }

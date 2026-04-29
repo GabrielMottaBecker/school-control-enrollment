@@ -15,12 +15,14 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import { MessagingService } from "@messaging/application/services/messaging.service";
 
 @Injectable()
 export class EnrollmentService {
   constructor(
     @Inject(ENROLLMENT_REPOSITORY)
     private readonly enrollmentRepository: EnrollmentRepository,
+    private readonly messagingService: MessagingService,
   ) {}
 
   async enroll(dto: CreateEnrollmentDto): Promise<void> {
@@ -44,6 +46,12 @@ export class EnrollmentService {
     });
 
     await this.enrollmentRepository.create(enrollment!);
+
+    await this.messagingService.publishEnrollmentCreated(
+      enrollment!.id ?? "",
+      dto.studentId,
+      dto.classOfferingId,
+    );
   }
 
   async cancel(id: string): Promise<void> {
@@ -54,6 +62,7 @@ export class EnrollmentService {
     }
 
     await this.enrollmentRepository.cancel(id);
+    await this.messagingService.publishEnrollmentCanceled(id);
   }
 
   async listByClassOffering(

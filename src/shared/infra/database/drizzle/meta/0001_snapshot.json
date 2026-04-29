@@ -1,28 +1,9 @@
 {
-  "id": "a471b809-c7da-49e4-a4f9-cc2800e86132",
-  "prevId": "eb756038-7e3d-4fef-b2d4-1a43a1ef10a7",
+  "id": "11111111-1111-1111-1111-111111111111",
+  "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
-    "public.class_offerings": {
-      "name": "class_offerings",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.enrollments": {
       "name": "enrollments",
       "schema": "",
@@ -76,52 +57,6 @@
           "name": "updated_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "enrollments_student_id_students_id_fk": {
-          "name": "enrollments_student_id_students_id_fk",
-          "tableFrom": "enrollments",
-          "tableTo": "students",
-          "columnsFrom": [
-            "student_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "enrollments_class_offering_id_class_offerings_id_fk": {
-          "name": "enrollments_class_offering_id_class_offerings_id_fk",
-          "tableFrom": "enrollments",
-          "tableTo": "class_offerings",
-          "columnsFrom": [
-            "class_offering_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.students": {
-      "name": "students",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
           "notNull": true
         }
       },

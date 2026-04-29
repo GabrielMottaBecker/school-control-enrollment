@@ -4,9 +4,10 @@ import { EnrollmentsController } from "@enrollment/infra/controllers/enrollments
 import { DrizzleEnrollmentRepository } from "@enrollment/infra/repositories/drizzle-enrollment.repository";
 import { Module } from "@nestjs/common";
 import { SharedModule } from "@shared/shared.module";
+import { MessagingModule } from "@messaging/messaging.module";
 
 @Module({
-  imports: [SharedModule],
+  imports: [SharedModule, MessagingModule],
   controllers: [EnrollmentsController],
   providers: [
     EnrollmentService,
