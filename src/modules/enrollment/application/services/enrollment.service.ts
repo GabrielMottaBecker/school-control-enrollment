@@ -1,5 +1,6 @@
 import { CreateEnrollmentDto } from "@enrollment/application/dto/create-enrollment.dto";
 import { EnrollmentDto } from "@enrollment/application/dto/enrollment.dto";
+import { EnrollmentEventPublisher } from "@enrollment/application/services/enrollment-event.publisher";
 import {
   Enrollment,
   EnrollmentStatus,
@@ -15,14 +16,13 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { MessagingService } from "@messaging/application/services/messaging.service";
 
 @Injectable()
 export class EnrollmentService {
   constructor(
     @Inject(ENROLLMENT_REPOSITORY)
     private readonly enrollmentRepository: EnrollmentRepository,
-    private readonly messagingService: MessagingService,
+    private readonly eventPublisher: EnrollmentEventPublisher,
   ) {}
 
   async enroll(dto: CreateEnrollmentDto): Promise<void> {
@@ -46,12 +46,7 @@ export class EnrollmentService {
     });
 
     await this.enrollmentRepository.create(enrollment!);
-
-    await this.messagingService.publishEnrollmentCreated(
-      enrollment!.id ?? "",
-      dto.studentId,
-      dto.classOfferingId,
-    );
+    this.eventPublisher.enrollmentCreated(dto.studentId, dto.classOfferingId);
   }
 
   async cancel(id: string): Promise<void> {
@@ -62,7 +57,7 @@ export class EnrollmentService {
     }
 
     await this.enrollmentRepository.cancel(id);
-    await this.messagingService.publishEnrollmentCanceled(id);
+    this.eventPublisher.enrollmentCancelled(id);
   }
 
   async listByClassOffering(

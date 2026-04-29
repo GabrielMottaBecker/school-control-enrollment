@@ -1,13 +1,12 @@
 # School Control API
 
-API REST para gestão escolar, construída com NestJS + Drizzle ORM + PostgreSQL + RabbitMQ.
+API REST para gestão escolar, construída com NestJS + Drizzle ORM + PostgreSQL.
 
 ## Pré-requisitos
 
 - [Node.js](https://nodejs.org) >= 20
 - [npm](https://www.npmjs.com) >= 10
 - [PostgreSQL](https://www.postgresql.org) >= 14 rodando localmente (ou via Docker)
-- [Docker](https://www.docker.com) para subir o RabbitMQ
 
 ---
 
@@ -21,38 +20,21 @@ npm install
 
 ### 2. Configurar variáveis de ambiente
 
-Crie um arquivo `.env` na raiz do projeto:
+Crie um arquivo `.env` na raiz do projeto com base no exemplo abaixo:
 
 ```env
 DATABASE_URL=postgres://postgres:sua_senha@localhost:5432/nome_do_banco
-RABBITMQ_URL=amqp://admin:admin@localhost:5672
 PORT=3000
 ```
 
 | Variável | Descrição |
 |---|---|
 | `DATABASE_URL` | Connection string do PostgreSQL |
-| `RABBITMQ_URL` | URL de conexão com o RabbitMQ |
 | `PORT` | Porta em que a API vai subir |
 
-### 3. Subir o RabbitMQ com Docker
+### 3. Criar e migrar o banco de dados
 
-Na raiz do projeto, execute:
-
-```bash
-docker compose up -d rabbitmq
-```
-
-O `docker-compose.yml` já está configurado com usuário `admin`/`admin` e expõe:
-- `5672` — porta AMQP (usada pela aplicação)
-- `15672` — Management UI (acesse em `http://localhost:15672`)
-
-> **Atenção:** Se houver uma instalação local do RabbitMQ no Windows, pare o serviço antes de subir o Docker para evitar conflito de porta:
-> ```powershell
-> net stop RabbitMQ
-> ```
-
-### 4. Criar e migrar o banco de dados
+Com o PostgreSQL rodando, execute as migrações para criar as tabelas:
 
 ```bash
 npm run db:migrate
@@ -62,7 +44,7 @@ npm run db:migrate
 
 ## Rodando a aplicação
 
-### Desenvolvimento (com hot reload)
+### Desenvolvimento
 
 ```bash
 npm run start:dev
@@ -75,8 +57,7 @@ npm run build
 npm run start:prod
 ```
 
-A API ficará disponível em `http://localhost:3000`.
-A documentação Swagger em `http://localhost:3000/docs`.
+A API ficará disponível em `http://localhost:3000` (ou na porta configurada em `PORT`).
 
 ---
 
@@ -99,7 +80,7 @@ A documentação Swagger em `http://localhost:3000/docs`.
 
 ## Subindo o PostgreSQL com Docker
 
-Caso não tenha o PostgreSQL instalado localmente:
+Caso não tenha o PostgreSQL instalado localmente, suba uma instância com Docker:
 
 ```bash
 docker run --name school-db \
@@ -112,43 +93,52 @@ docker run --name school-db \
 
 ---
 
-## Módulo de Matrículas (Enrollments)
+## Documentação interativa (Swagger)
 
-Gerencia matrículas de alunos em turmas com publicação de eventos via RabbitMQ.
-
-### Rotas disponíveis
-
-#### GET /v1/enrollments — Listar matrículas de uma turma
+Com a aplicação rodando, acesse a documentação interativa em:
 
 ```
-GET http://localhost:3000/v1/enrollments?class_offering_id={id}&_page=1&_size=10
+http://localhost:3000/docs
 ```
 
-**Resposta de sucesso:** `200 OK`
-```json
-{
-  "data": [
-    {
-      "id": "e0000005-0000-0000-0000-000000000001",
-      "studentId": "c0000003-0000-0000-0000-000000000001",
-      "classOfferingId": "d0000004-0000-0000-0000-000000000001",
-      "status": "active",
-      "enrolledAt": "2025-02-08T00:00:00.000Z",
-      "canceledAt": null,
-      "_links": {
-        "self": { "href": "/v1/enrollments/e0000005-...", "method": "GET" },
-        "cancel": { "href": "/v1/enrollments/e0000005-.../cancel", "method": "PATCH" }
-      }
-    }
-  ],
-  "meta": { "totalItems": 1, "itemsPerPage": 10, "currentPage": 1, "totalPages": 1 },
-  "_links": { "self": {...}, "first": {...}, "last": {...}, "next": null, "prev": null }
-}
+O Swagger lista todas as rotas disponíveis, permite preencher os parâmetros e disparar requisições diretamente pelo navegador.
+
+---
+
+## Banco de dados
+
+Após rodar `db:migrate`, três tabelas são criadas:
+
+| Tabela | Descrição |
+|---|---|
+| `students` | Tabela de referência — armazena apenas o `id` do aluno |
+| `class_offerings` | Tabela de referência — armazena apenas o `id` da turma |
+| `enrollments` | Tabela principal — registra as matrículas com FK para as duas tabelas acima |
+
+> As tabelas `students` e `class_offerings` são tabelas de referência seguindo o princípio de microsserviços — armazenam apenas os dados necessários para garantir integridade referencial no banco. A gestão completa desses dados é responsabilidade dos seus respectivos microserviços.
+
+### Inserindo dados de referência
+
+Antes de criar uma matrícula, os IDs do aluno e da turma precisam existir nas tabelas de referência. Insira via Drizzle Studio (`npm run db:studio`) na aba SQL:
+
+```sql
+INSERT INTO students (id) VALUES ('uuid-do-aluno');
+INSERT INTO class_offerings (id) VALUES ('uuid-da-turma');
 ```
 
 ---
 
+## Módulo de Matrículas (Enrollments)
+
+**Base URL:** `http://localhost:3000/v1/enrollments`
+
+---
+
+### Rotas disponíveis
+
 #### POST /v1/enrollments — Criar matrícula
+
+Matricula um aluno em uma turma. Ambos os campos são obrigatórios e devem ser UUIDs válidos e previamente inseridos nas tabelas de referência.
 
 ```
 POST http://localhost:3000/v1/enrollments
@@ -158,14 +148,26 @@ Content-Type: application/json
 **Body:**
 ```json
 {
-  "studentId": "c0000003-0000-0000-0000-000000000001",
-  "classOfferingId": "d0000004-0000-0000-0000-000000000001"
+  "studentId": "3a7b9e2c-1f4d-4a8b-9c0e-5d6f7a8b9c0d",
+  "classOfferingId": "8b3f2a1e-6c7d-4e9f-b5a2-1c3d4e5f6a7b"
 }
 ```
 
-**Resposta de sucesso:** `201 Created`
+**Resposta de sucesso:** `201 Created` (sem body)
 
-**Resposta de erro (já matriculado):** `409 Conflict`
+**Resposta de erro — campos inválidos:** `400 Bad Request`
+```json
+{
+  "message": [
+    "studentId must be a UUID",
+    "classOfferingId must be a UUID"
+  ],
+  "error": "Bad Request",
+  "statusCode": 400
+}
+```
+
+**Resposta de erro — já matriculado:** `409 Conflict`
 ```json
 {
   "message": "Student is already enrolled in this class offering",
@@ -174,197 +176,105 @@ Content-Type: application/json
 }
 ```
 
-> Ao criar uma matrícula, o evento `enrollment.created` é publicado automaticamente na exchange `enrollment.created.exchange` com routing key `enrollment.created`.
+**Resposta de erro — IDs não existem nas tabelas de referência:** `500 Internal Server Error`
+
+> Garanta que o `studentId` existe em `students` e o `classOfferingId` existe em `class_offerings` antes de criar a matrícula.
+
+---
+
+#### GET /v1/enrollments — Listar matrículas de uma turma
+
+Retorna as matrículas de uma turma com paginação e links HATEOAS.
+
+```
+GET http://localhost:3000/v1/enrollments?class_offering_id={id}&_page=1&_size=10
+```
+
+| Query param | Obrigatório | Descrição |
+|---|---|---|
+| `class_offering_id` | Sim | ID da turma |
+| `_page` | Não | Página desejada (padrão: `1`) |
+| `_size` | Não | Itens por página (padrão: `10`) |
+
+**Resposta de sucesso:** `200 OK`
+```json
+{
+  "data": [
+    {
+      "id": "e0000005-0000-0000-0000-000000000001",
+      "studentId": "3a7b9e2c-1f4d-4a8b-9c0e-5d6f7a8b9c0d",
+      "classOfferingId": "8b3f2a1e-6c7d-4e9f-b5a2-1c3d4e5f6a7b",
+      "status": "active",
+      "enrolledAt": "2025-02-08T00:00:00.000Z",
+      "canceledAt": null,
+      "_links": {
+        "self": { "href": "/v1/enrollments/e0000005-0000-0000-0000-000000000001", "method": "GET" },
+        "cancel": { "href": "/v1/enrollments/e0000005-0000-0000-0000-000000000001/cancel", "method": "PATCH" }
+      }
+    }
+  ],
+  "meta": {
+    "totalItems": 1,
+    "itemsPerPage": 10,
+    "currentPage": 1,
+    "totalPages": 1
+  },
+  "_links": {
+    "self": { "href": "/v1/enrollments?_page=1&_size=10", "method": "GET" },
+    "next": null,
+    "prev": null,
+    "first": { "href": "/v1/enrollments?_page=1&_size=10", "method": "GET" },
+    "last": { "href": "/v1/enrollments?_page=1&_size=10", "method": "GET" },
+    "create": { "href": "/v1/enrollments", "method": "POST" }
+  }
+}
+```
 
 ---
 
 #### PATCH /v1/enrollments/:id/cancel — Cancelar matrícula
 
+Cancela uma matrícula pelo seu ID. Não recebe body.
+
 ```
 PATCH http://localhost:3000/v1/enrollments/{id}/cancel
 ```
 
-**Resposta de sucesso:** `204 No Content`
+**Resposta de sucesso:** `204 No Content` (sem body)
 
-**Resposta de erro (não encontrada):** `404 Not Found`
-
-> Ao cancelar, o evento `enrollment.canceled` é publicado na exchange `enrollment.canceled.exchange`.
-
----
-
-## Módulo de Mensageria (Messaging)
-
-Gerencia a comunicação assíncrona com outros microserviços via RabbitMQ.
-
-### Convenção de nomenclatura
-
-| Elemento | Padrão | Exemplo |
-|---|---|---|
-| Exchange | `{producer-service}.{event}.exchange` | `enrollment.created.exchange` |
-| Fila | `{consumer-service}.{producer-service}.{event}.queue` | `enrollment.academic-students.created.queue` |
-| Routing Key | `{entity}.{action}` | `enrollment.created` |
-
-### Exchanges publicadas (producer)
-
-| Exchange | Routing Key | Descrição |
-|---|---|---|
-| `enrollment.created.exchange` | `enrollment.created` | Publicado ao criar uma matrícula |
-| `enrollment.canceled.exchange` | `enrollment.canceled` | Publicado ao cancelar uma matrícula |
-
-### Filas consumidas (consumer)
-
-| Fila | Exchange vinculada | Routing Key | Ação |
-|---|---|---|---|
-| `enrollment.academic-students.created.queue` | `academic.students.created.exchange` | `student.created` | Insere student na tabela de referência |
-| `enrollment.academic-students.updated.queue` | `academic.students.updated.exchange` | `student.updated` | Garante registro em students |
-| `enrollment.academic-students.deleted.queue` | `academic.students.deleted.exchange` | `student.deleted` | Remove da tabela students |
-| `enrollment.class-offering.created.queue` | `class-offering.created.exchange` | `class-offering.created` | Insere class_offering na tabela de referência |
-| `enrollment.class-offering.updated.queue` | `class-offering.updated.exchange` | `class-offering.updated` | Garante registro em class_offerings |
-| `enrollment.class-offering.canceled.queue` | `class-offering.canceled.exchange` | `class-offering.canceled` | Remove de class_offerings |
-
-### Rotas disponíveis
-
-#### POST /v1/messaging/setup — Inicializar exchanges e filas
-
-Deve ser chamado uma vez ao subir o ambiente. Cria todas as exchanges e filas com seus bindings.
-
-```bash
-curl -X POST http://localhost:3000/v1/messaging/setup
-```
-
-**Resposta:** `204 No Content`
-
----
-
-#### POST /v1/messaging/publish/enrollment-created — Publicar evento de matrícula criada
-
+**Resposta de erro — não encontrada:** `404 Not Found`
 ```json
-{ "content": "{\"enrollmentId\":\"uuid\",\"studentId\":\"uuid\",\"classOfferingId\":\"uuid\"}" }
-```
-
-#### POST /v1/messaging/publish/enrollment-canceled — Publicar evento de matrícula cancelada
-
-```json
-{ "content": "{\"enrollmentId\":\"uuid\"}" }
+{
+  "message": "Enrollment not found",
+  "error": "Not Found",
+  "statusCode": 404
+}
 ```
 
 ---
 
-#### GET /v1/messaging/consume/student-created — Consumir student.created
+### Exemplo de fluxo completo
 
-Lê a próxima mensagem da fila `enrollment.academic-students.created.queue` e sincroniza a tabela `students`.
+1. **Inserir dados de referência** via Drizzle Studio (`npm run db:studio`):
+   ```sql
+   INSERT INTO students (id) VALUES ('3a7b9e2c-1f4d-4a8b-9c0e-5d6f7a8b9c0d');
+   INSERT INTO class_offerings (id) VALUES ('8b3f2a1e-6c7d-4e9f-b5a2-1c3d4e5f6a7b');
+   ```
 
-#### GET /v1/messaging/consume/student-updated — Consumir student.updated
+2. **Criar uma matrícula**
+   - `POST /v1/enrollments` com `studentId` e `classOfferingId` no body
 
-#### GET /v1/messaging/consume/student-deleted — Consumir student.deleted
+3. **Verificar a matrícula criada**
+   - `GET /v1/enrollments?class_offering_id={classOfferingId}` — o registro aparece com `"status": "active"`
 
-Remove o estudante da tabela de referência `students`.
+4. **Cancelar a matrícula**
+   - `PATCH /v1/enrollments/{id}/cancel` usando o `id` retornado no passo 3
 
-#### GET /v1/messaging/consume/class-offering-created — Consumir class-offering.created
-
-Sincroniza a tabela `class_offerings`.
-
-#### GET /v1/messaging/consume/class-offering-updated — Consumir class-offering.updated
-
-#### GET /v1/messaging/consume/class-offering-canceled — Consumir class-offering.canceled
-
-Remove a turma da tabela de referência `class_offerings`.
-
----
-
-### Fluxo de teste completo
-
-1. Suba o RabbitMQ: `docker compose up -d rabbitmq`
-2. Inicie a aplicação: `npm run start:dev`
-3. Execute o setup: `POST /v1/messaging/setup`
-4. No Management UI (`http://localhost:15672`), publique na `academic.students.created.exchange` com routing key `student.created` e payload `{"id":"uuid-do-student"}`
-5. Consuma: `GET /v1/messaging/consume/student-created` — o app insere o student na tabela
-6. Repita para `class-offering.created.exchange` e `GET /v1/messaging/consume/class-offering-created`
-7. Crie a matrícula: `POST /v1/enrollments` com os UUIDs usados acima
-8. Verifique no Management UI que a mensagem chegou em `enrollment.created.exchange`
+5. **Verificar o cancelamento**
+   - `GET /v1/enrollments?class_offering_id={classOfferingId}` novamente — o registro aparecerá com `"status": "canceled"`
 
 ---
 
-## Arquitetura do projeto
+## Documentação
 
-```
-src/
-├── app.module.ts                          # Módulo raiz — importa SharedModule e EnrollmentModule
-├── main.ts                                # Bootstrap da aplicação, Swagger e ValidationPipe
-│
-├── modules/
-│   ├── enrollment/                        # Módulo de matrículas
-│   │   ├── enrollment.module.ts           # Registro do módulo, importa SharedModule e MessagingModule
-│   │   │
-│   │   ├── application/
-│   │   │   ├── dto/
-│   │   │   │   ├── create-enrollment.dto.ts   # DTO de entrada para criar matrícula (validação UUID)
-│   │   │   │   └── enrollment.dto.ts          # DTO de saída com @ApiProperty para o Swagger
-│   │   │   └── services/
-│   │   │       └── enrollment.service.ts      # Regras de negócio: enroll, cancel, listByClassOffering
-│   │   │
-│   │   ├── domain/
-│   │   │   ├── models/
-│   │   │   │   └── enrollment.entity.ts       # Entidade de domínio Enrollment com EnrollmentStatus
-│   │   │   └── repositories/
-│   │   │       └── enrollment-repository.interface.ts  # Contrato do repositório (token de injeção)
-│   │   │
-│   │   └── infra/
-│   │       ├── controllers/
-│   │       │   └── enrollments.controller.ts  # Rotas HTTP: GET, POST, PATCH com Swagger e HATEOAS
-│   │       ├── repositories/
-│   │       │   └── drizzle-enrollment.repository.ts  # Implementação do repositório com Drizzle ORM
-│   │       └── schemas/
-│   │           ├── enrollment.schema.ts              # Schema Drizzle da tabela enrollments
-│   │           ├── student-reference.schema.ts       # Schema Drizzle da tabela students (referência)
-│   │           ├── class-offering-reference.schema.ts # Schema Drizzle da tabela class_offerings (referência)
-│   │           └── index.ts                          # Re-exporta todos os schemas
-│   │
-│   └── messaging/                         # Módulo de mensageria RabbitMQ
-│       ├── messaging.module.ts            # Registro do módulo, exporta MessagingService
-│       │
-│       ├── application/
-│       │   ├── dto/
-│       │   │   ├── publish-message.dto.ts     # DTO para publicar mensagem (campo content)
-│       │   │   └── consumed-message.dto.ts    # DTO de retorno ao consumir (content + queue)
-│       │   └── services/
-│       │       └── messaging.service.ts       # Lógica de assertExchange, assertQueue, publish, consume e sync
-│       │
-│       └── infra/
-│           ├── controllers/
-│           │   └── messaging.controller.ts    # Rotas HTTP: setup, publish e consume com constantes de exchange/fila
-│           └── rabbitmq/
-│               └── rabbitmq.service.ts        # Conexão AMQP com retry, expõe getChannel()
-│
-└── shared/                                # Módulo compartilhado
-    ├── shared.module.ts                   # Registra DrizzleService e HateoasInterceptor global
-    └── infra/
-        ├── database/
-        │   └── drizzle.service.ts         # Instância do Drizzle ORM com pool PostgreSQL
-        └── hateoas/
-            ├── hateoas.interceptor.ts     # Interceptor global que adiciona _links e meta de paginação
-            ├── hateoas-list.decorator.ts  # Decorator @HateoasList para endpoints de listagem
-            ├── hateoas-item.decorator.ts  # Decorator @HateoasItem para endpoints de item único
-            ├── hateoas.types.ts           # Tipos PaginatedResult, LinkDef e LinksMap
-            └── index.ts                   # Re-exporta tudo do módulo hateoas
-```
-
-### Fluxo de dependências entre módulos
-
-```
-AppModule
-├── SharedModule      → DrizzleService, HateoasInterceptor
-└── EnrollmentModule
-    ├── SharedModule  → DrizzleService
-    └── MessagingModule
-        ├── SharedModule   → DrizzleService (para sync das tabelas de referência)
-        └── RabbitMQService → canal AMQP
-```
-
-### Banco de dados — tabelas
-
-| Tabela | Descrição |
-|---|---|
-| `enrollments` | Matrículas com status `active`/`canceled`, FK para students e class_offerings |
-| `students` | Tabela de referência — sincronizada via eventos RabbitMQ do microserviço academic |
-| `class_offerings` | Tabela de referência — sincronizada via eventos RabbitMQ do microserviço class-offering |
+- [Arquitetura do projeto](docs/arquitetura.md)
