@@ -8,7 +8,7 @@ export class CreateEnrollmentDto {
   })
   @IsUUID("all")
   @IsNotEmpty()
-  studentId: string;
+  studentId!: string;
 
   @ApiProperty({
     description: "ID da turma",
@@ -16,5 +16,5 @@ export class CreateEnrollmentDto {
   })
   @IsUUID("all")
   @IsNotEmpty()
-  classOfferingId: string;
+  classOfferingId!: string;
 }

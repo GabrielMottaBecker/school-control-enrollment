@@ -1,13 +1,13 @@
 {
-    "version": "7",
-    "dialect": "postgresql",
-    "entries": [
-        {
-            "idx": 0,
-            "version": "7",
-            "when": 1742940000000,
-            "tag": "0000_mean_kid_colt",
-            "breakpoints": true
-        }
-    ]
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1742940000000,
+      "tag": "0000_enrollment_init",
+      "breakpoints": true
+    }
+  ]
 }
