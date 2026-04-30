@@ -1,13 +1,22 @@
 import { DrizzleService } from "@shared/infra/database/drizzle.service";
-import { Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { Injectable, Logger, NotFoundException, OnModuleInit } from "@nestjs/common";
 import { RabbitMQService } from "@messaging/infra/rabbitmq/rabbitmq.service";
 import type { PublishMessageDto } from "../dto/publish-message.dto";
 import { ConsumedMessageDto } from "../dto/consumed-message.dto";
+import type { ConsumeMessage } from "amqplib";
 import { classOfferingsReferenceSchema, studentsReferenceSchema } from "@enrollment/infra/schemas";
 import { eq } from "drizzle-orm";
 
+// Filas consumidas automaticamente 
+const STUDENT_CREATED_QUEUE   = "enrollment.academic-students.created.queue";
+const STUDENT_UPDATED_QUEUE   = "enrollment.academic-students.updated.queue";
+const STUDENT_DELETED_QUEUE   = "enrollment.academic-students.deleted.queue";
+const CLASS_CREATED_QUEUE     = "enrollment.class-offering.created.queue";
+const CLASS_UPDATED_QUEUE     = "enrollment.class-offering.updated.queue";
+const CLASS_CANCELED_QUEUE    = "enrollment.class-offering.canceled.queue";
+
 @Injectable()
-export class MessagingService {
+export class MessagingService implements OnModuleInit {
   private readonly logger = new Logger(MessagingService.name);
 
   constructor(
@@ -15,7 +24,125 @@ export class MessagingService {
     private readonly drizzleService: DrizzleService,
   ) {}
 
-  // ─── Exchange & Queue setup ───────────────────────────────────────────────
+  // Auto-start consumers após módulo inicializar 
+
+  async onModuleInit(): Promise<void> {
+    // Aguarda o canal estar disponível (RabbitMQService inicializa primeiro)
+    // Pequeno delay para garantir que o canal está pronto
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await this.startConsumers();
+  }
+
+  async startConsumers(): Promise<void> {
+    const channel = this.rabbitMQService.getChannel();
+
+    if (!channel) {
+      this.logger.warn("Canal RabbitMQ não disponível — consumers não registrados");
+      return;
+    }
+
+    this.logger.log("Registrando consumers automáticos...");
+
+    // Students
+    await channel.consume(STUDENT_CREATED_QUEUE, async (msg: ConsumeMessage | null) => {
+      if (!msg) return;
+      try {
+        const { id } = JSON.parse(msg.content.toString()) as { id: string };
+        await this.drizzleService.db
+          .insert(studentsReferenceSchema)
+          .values({ id })
+          .onConflictDoNothing();
+        channel.ack(msg);
+        this.logger.log(`[AUTO] Student created synced: ${id}`);
+      } catch (err) {
+        channel.nack(msg, false, true); // requeue
+        this.logger.error(`[AUTO] Erro ao processar student.created`, err);
+      }
+    });
+
+    await channel.consume(STUDENT_UPDATED_QUEUE, async (msg: ConsumeMessage | null) => {
+      if (!msg) return;
+      try {
+        const { id } = JSON.parse(msg.content.toString()) as { id: string };
+        await this.drizzleService.db
+          .insert(studentsReferenceSchema)
+          .values({ id })
+          .onConflictDoNothing();
+        channel.ack(msg);
+        this.logger.log(`[AUTO] Student updated synced: ${id}`);
+      } catch (err) {
+        channel.nack(msg, false, true);
+        this.logger.error(`[AUTO] Erro ao processar student.updated`, err);
+      }
+    });
+
+    await channel.consume(STUDENT_DELETED_QUEUE, async (msg: ConsumeMessage | null) => {
+      if (!msg) return;
+      try {
+        const { id } = JSON.parse(msg.content.toString()) as { id: string };
+        await this.drizzleService.db
+          .delete(studentsReferenceSchema)
+          .where(eq(studentsReferenceSchema.id, id));
+        channel.ack(msg);
+        this.logger.log(`[AUTO] Student deleted synced: ${id}`);
+      } catch (err) {
+        channel.nack(msg, false, true);
+        this.logger.error(`[AUTO] Erro ao processar student.deleted`, err);
+      }
+    });
+
+    // Class Offerings 
+    await channel.consume(CLASS_CREATED_QUEUE, async (msg: ConsumeMessage | null) => {
+      if (!msg) return;
+      try {
+        const { id } = JSON.parse(msg.content.toString()) as { id: string };
+        await this.drizzleService.db
+          .insert(classOfferingsReferenceSchema)
+          .values({ id })
+          .onConflictDoNothing();
+        channel.ack(msg);
+        this.logger.log(`[AUTO] ClassOffering created synced: ${id}`);
+      } catch (err) {
+        channel.nack(msg, false, true);
+        this.logger.error(`[AUTO] Erro ao processar class-offering.created`, err);
+      }
+    });
+
+    await channel.consume(CLASS_UPDATED_QUEUE, async (msg: ConsumeMessage | null) => {
+      if (!msg) return;
+      try {
+        const { id } = JSON.parse(msg.content.toString()) as { id: string };
+        await this.drizzleService.db
+          .insert(classOfferingsReferenceSchema)
+          .values({ id })
+          .onConflictDoNothing();
+        channel.ack(msg);
+        this.logger.log(`[AUTO] ClassOffering updated synced: ${id}`);
+      } catch (err) {
+        channel.nack(msg, false, true);
+        this.logger.error(`[AUTO] Erro ao processar class-offering.updated`, err);
+      }
+    });
+
+    await channel.consume(CLASS_CANCELED_QUEUE, async (msg: ConsumeMessage | null) => {
+      if (!msg) return;
+      try {
+        const { id } = JSON.parse(msg.content.toString()) as { id: string };
+        await this.drizzleService.db
+          .delete(classOfferingsReferenceSchema)
+          .where(eq(classOfferingsReferenceSchema.id, id));
+        channel.ack(msg);
+        this.logger.log(`[AUTO] ClassOffering canceled synced: ${id}`);
+      } catch (err) {
+        channel.nack(msg, false, true);
+        this.logger.error(`[AUTO] Erro ao processar class-offering.canceled`, err);
+      }
+    });
+
+    this.logger.log("Consumers automáticos registrados com sucesso");
+  }
+
+  // Exchange & Queue setup 
 
   async assertExchange(name: string): Promise<void> {
     this.logger.log(`Asserting exchange: ${name}`);
@@ -32,7 +159,7 @@ export class MessagingService {
     this.logger.log(`Queue OK: ${queueName}`);
   }
 
-  // ─── Publisher ────────────────────────────────────────────────────────────
+  // Publisher 
 
   async publish(dto: PublishMessageDto, exchangeName: string, routingKey: string): Promise<void> {
     const channel = this.rabbitMQService.getChannel();
@@ -50,7 +177,7 @@ export class MessagingService {
     await this.publish({ content: payload }, "enrollment.canceled.exchange", "enrollment.canceled");
   }
 
-  // ─── Consumer ─────────────────────────────────────────────────────────────
+  // Consumer pull (mantido para uso manual via GET) 
 
   async consume(queueName: string): Promise<ConsumedMessageDto> {
     const channel = this.rabbitMQService.getChannel();
@@ -66,7 +193,7 @@ export class MessagingService {
     return ConsumedMessageDto.from(queueName, content);
   }
 
-  // ─── Sync: students reference table ──────────────────────────────────────
+  // ─── Sync pull (mantido para compatibilidade com endpoints GET) ───────────
 
   async syncStudentCreated(queueName: string): Promise<ConsumedMessageDto> {
     const msg = await this.consume(queueName);
@@ -80,7 +207,6 @@ export class MessagingService {
   }
 
   async syncStudentUpdated(queueName: string): Promise<ConsumedMessageDto> {
-    // No fields to update in the reference table — just ensure the record exists
     const msg = await this.consume(queueName);
     const { id } = JSON.parse(msg.content) as { id: string };
     await this.drizzleService.db
@@ -100,8 +226,6 @@ export class MessagingService {
     this.logger.log(`Student synced (deleted): ${id}`);
     return msg;
   }
-
-  // ─── Sync: class_offerings reference table ────────────────────────────────
 
   async syncClassOfferingCreated(queueName: string): Promise<ConsumedMessageDto> {
     const msg = await this.consume(queueName);

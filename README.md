@@ -274,14 +274,16 @@ Remove a turma da tabela de referência `class_offerings`.
 
 ### Fluxo de teste completo
 
-1. Suba o RabbitMQ: `docker compose up -d rabbitmq`
-2. Inicie a aplicação: `npm run start:dev`
-3. Execute o setup: `POST /v1/messaging/setup`
-4. No Management UI (`http://localhost:15672`), publique na `academic.students.created.exchange` com routing key `student.created` e payload `{"id":"uuid-do-student"}`
-5. Consuma: `GET /v1/messaging/consume/student-created` — o app insere o student na tabela
-6. Repita para `class-offering.created.exchange` e `GET /v1/messaging/consume/class-offering-created`
+1. Pare o RabbitMQ local do Windows (se instalado): `net stop RabbitMQ`
+2. Suba o RabbitMQ: `docker compose up -d rabbitmq`
+3. Inicie a aplicação: `npm run start:dev`
+4. Execute o setup uma única vez: `POST /v1/messaging/setup`
+5. No Management UI (`http://localhost:15672`), publique na `academic.students.created.exchange` com routing key `student.created` e payload `{"id":"uuid-do-student"}` — o app sincroniza automaticamente a tabela `students`
+6. Repita para `class-offering.created.exchange` com routing key `class-offering.created` e payload `{"id":"uuid-da-turma"}` — sincroniza `class_offerings`
 7. Crie a matrícula: `POST /v1/enrollments` com os UUIDs usados acima
 8. Verifique no Management UI que a mensagem chegou em `enrollment.created.exchange`
+
+> **Consumers automáticos:** ao iniciar a aplicação, todos os consumers das filas são registrados automaticamente. Mensagens publicadas nas exchanges de `academic.students` e `class-offering` são processadas e sincronizadas nas tabelas de referência sem necessidade de chamada manual. Os endpoints `GET /v1/messaging/consume/*` permanecem disponíveis para debug e teste manual via Swagger.
 
 ---
 
